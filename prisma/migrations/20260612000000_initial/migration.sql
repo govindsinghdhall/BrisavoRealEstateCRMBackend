@@ -1,4 +1,10 @@
 -- CreateEnum
+CREATE TYPE "OrganizationStatus" AS ENUM ('ACTIVE', 'TRIAL', 'SUSPENDED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "SubscriptionStatus" AS ENUM ('TRIAL', 'ACTIVE', 'PAST_DUE', 'CANCELLED', 'EXPIRED');
+
+-- CreateEnum
 CREATE TYPE "LeadSourceType" AS ENUM ('WEBSITE', 'FACEBOOK', 'GOOGLE', 'WHATSAPP', 'MANUAL_ENTRY', 'REFERRAL', 'WALK_IN', 'OTHER');
 
 -- CreateEnum
@@ -17,10 +23,28 @@ CREATE TYPE "UnitStatus" AS ENUM ('AVAILABLE', 'BOOKED', 'SOLD', 'BLOCKED', 'HOL
 CREATE TYPE "UnitType" AS ENUM ('STUDIO', 'ONE_BHK', 'TWO_BHK', 'THREE_BHK', 'FOUR_BHK', 'PENTHOUSE', 'VILLA', 'PLOT', 'COMMERCIAL');
 
 -- CreateEnum
-CREATE TYPE "PropertyType" AS ENUM ('APARTMENT', 'VILLA', 'PLOT', 'COMMERCIAL', 'OFFICE', 'WAREHOUSE');
+CREATE TYPE "ListingCategory" AS ENUM ('BUY', 'RENT', 'COMMERCIAL', 'NEW_PROJECTS', 'PG', 'PLOT', 'LUXURY');
+
+-- CreateEnum
+CREATE TYPE "PropertyType" AS ENUM ('APARTMENT', 'BUILDER_FLOOR', 'VILLA', 'PLOT', 'COMMERCIAL', 'OFFICE', 'SHOP', 'WAREHOUSE', 'COWORKING_SPACE');
 
 -- CreateEnum
 CREATE TYPE "PropertyStatus" AS ENUM ('AVAILABLE', 'UNDER_OFFER', 'SOLD', 'RENTED', 'OFF_MARKET');
+
+-- CreateEnum
+CREATE TYPE "PropertyAge" AS ENUM ('UNDER_CONSTRUCTION', 'READY_TO_MOVE', 'NEW', 'ONE_TO_FIVE_YEARS', 'FIVE_TO_TEN_YEARS', 'TEN_PLUS_YEARS');
+
+-- CreateEnum
+CREATE TYPE "Furnishing" AS ENUM ('FULLY_FURNISHED', 'SEMI_FURNISHED', 'UNFURNISHED');
+
+-- CreateEnum
+CREATE TYPE "Facing" AS ENUM ('NORTH', 'SOUTH', 'EAST', 'WEST');
+
+-- CreateEnum
+CREATE TYPE "PossessionStatus" AS ENUM ('IMMEDIATE', 'WITHIN_3_MONTHS', 'WITHIN_6_MONTHS', 'WITHIN_1_YEAR');
+
+-- CreateEnum
+CREATE TYPE "PropertyLookupType" AS ENUM ('LOCALITY', 'SECTOR', 'LANDMARK', 'PINCODE', 'BUILDER');
 
 -- CreateEnum
 CREATE TYPE "VisitStatus" AS ENUM ('SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'RESCHEDULED');
@@ -41,6 +65,60 @@ CREATE TYPE "NotificationType" AS ENUM ('EMAIL', 'SMS', 'WHATSAPP');
 CREATE TYPE "NotificationStatus" AS ENUM ('PENDING', 'SENT', 'FAILED', 'DELIVERED');
 
 -- CreateTable
+CREATE TABLE "organizations" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "domain" TEXT,
+    "logo" TEXT,
+    "email" TEXT,
+    "phone" TEXT,
+    "address" TEXT,
+    "status" "OrganizationStatus" NOT NULL DEFAULT 'TRIAL',
+    "settings" JSONB,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "organizations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "subscription_plans" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "description" TEXT,
+    "price_monthly" DECIMAL(10,2) NOT NULL,
+    "price_yearly" DECIMAL(10,2),
+    "max_users" INTEGER NOT NULL,
+    "max_leads" INTEGER NOT NULL,
+    "max_properties" INTEGER NOT NULL,
+    "features" JSONB,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "subscription_plans_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "subscriptions" (
+    "id" TEXT NOT NULL,
+    "status" "SubscriptionStatus" NOT NULL DEFAULT 'TRIAL',
+    "trial_ends_at" TIMESTAMP(3),
+    "current_period_start" TIMESTAMP(3) NOT NULL,
+    "current_period_end" TIMESTAMP(3) NOT NULL,
+    "cancelled_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "organization_id" TEXT NOT NULL,
+    "plan_id" TEXT NOT NULL,
+
+    CONSTRAINT "subscriptions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "roles" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -49,6 +127,7 @@ CREATE TABLE "roles" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT,
 
     CONSTRAINT "roles_pkey" PRIMARY KEY ("id")
 );
@@ -88,6 +167,7 @@ CREATE TABLE "users" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT NOT NULL,
     "role_id" TEXT NOT NULL,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
@@ -127,6 +207,7 @@ CREATE TABLE "lead_sources" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT NOT NULL,
 
     CONSTRAINT "lead_sources_pkey" PRIMARY KEY ("id")
 );
@@ -150,6 +231,7 @@ CREATE TABLE "leads" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT NOT NULL,
     "source_id" TEXT NOT NULL,
     "assigned_to_id" TEXT,
     "created_by_id" TEXT NOT NULL,
@@ -201,6 +283,7 @@ CREATE TABLE "builders" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT NOT NULL,
 
     CONSTRAINT "builders_pkey" PRIMARY KEY ("id")
 );
@@ -224,6 +307,7 @@ CREATE TABLE "projects" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT NOT NULL,
     "builder_id" TEXT NOT NULL,
 
     CONSTRAINT "projects_pkey" PRIMARY KEY ("id")
@@ -263,28 +347,63 @@ CREATE TABLE "units" (
 );
 
 -- CreateTable
+CREATE TABLE "property_lookups" (
+    "id" TEXT NOT NULL,
+    "type" "PropertyLookupType" NOT NULL,
+    "value" TEXT NOT NULL,
+    "normalized_value" TEXT NOT NULL,
+    "usage_count" INTEGER NOT NULL DEFAULT 1,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT NOT NULL,
+
+    CONSTRAINT "property_lookups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "properties" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
+    "listing_category" "ListingCategory" NOT NULL DEFAULT 'BUY',
     "type" "PropertyType" NOT NULL,
     "status" "PropertyStatus" NOT NULL DEFAULT 'AVAILABLE',
     "price" DECIMAL(15,2) NOT NULL,
     "area" DECIMAL(10,2) NOT NULL,
+    "carpet_area" DECIMAL(10,2),
+    "built_up_area" DECIMAL(10,2),
+    "super_area" DECIMAL(10,2),
     "bedrooms" INTEGER,
     "bathrooms" INTEGER,
     "address" TEXT NOT NULL,
     "city" TEXT NOT NULL,
     "state" TEXT NOT NULL,
     "pincode" TEXT,
+    "locality" TEXT NOT NULL DEFAULT '',
+    "sector" TEXT,
+    "landmark" TEXT,
     "latitude" DECIMAL(10,8),
     "longitude" DECIMAL(11,8),
+    "builder_name" TEXT,
+    "property_age" "PropertyAge",
+    "furnishing" "Furnishing",
+    "facing" "Facing",
+    "possession_status" "PossessionStatus",
+    "possession_date" TEXT,
+    "roi_potential" DECIMAL(5,2),
+    "is_verified" BOOLEAN NOT NULL DEFAULT true,
+    "has_rera" BOOLEAN NOT NULL DEFAULT false,
+    "rera_id" TEXT,
+    "video_tour_url" TEXT,
+    "virtual_tour_url" TEXT,
     "amenities" TEXT[],
     "brochure_url" TEXT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT NOT NULL,
     "project_id" TEXT,
 
     CONSTRAINT "properties_pkey" PRIMARY KEY ("id")
@@ -335,7 +454,9 @@ CREATE TABLE "bookings" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
+    "organization_id" TEXT NOT NULL,
     "lead_id" TEXT NOT NULL,
+    "property_id" TEXT,
     "unit_id" TEXT,
     "agent_id" TEXT NOT NULL,
 
@@ -371,6 +492,7 @@ CREATE TABLE "notifications" (
     "sent_at" TIMESTAMP(3),
     "error" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "organization_id" TEXT NOT NULL,
 
     CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
 );
@@ -386,13 +508,44 @@ CREATE TABLE "audit_logs" (
     "ip_address" TEXT,
     "user_agent" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "organization_id" TEXT NOT NULL,
     "user_id" TEXT,
 
     CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "roles_name_key" ON "roles"("name");
+CREATE UNIQUE INDEX "organizations_slug_key" ON "organizations"("slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "organizations_domain_key" ON "organizations"("domain");
+
+-- CreateIndex
+CREATE INDEX "organizations_slug_idx" ON "organizations"("slug");
+
+-- CreateIndex
+CREATE INDEX "organizations_status_idx" ON "organizations"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "subscription_plans_name_key" ON "subscription_plans"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "subscription_plans_slug_key" ON "subscription_plans"("slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "subscriptions_organization_id_key" ON "subscriptions"("organization_id");
+
+-- CreateIndex
+CREATE INDEX "subscriptions_plan_id_idx" ON "subscriptions"("plan_id");
+
+-- CreateIndex
+CREATE INDEX "subscriptions_status_idx" ON "subscriptions"("status");
+
+-- CreateIndex
+CREATE INDEX "roles_organization_id_idx" ON "roles"("organization_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "roles_organization_id_name_key" ON "roles"("organization_id", "name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "permissions_name_key" ON "permissions"("name");
@@ -401,13 +554,16 @@ CREATE UNIQUE INDEX "permissions_name_key" ON "permissions"("name");
 CREATE UNIQUE INDEX "permissions_module_action_key" ON "permissions"("module", "action");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+CREATE INDEX "users_organization_id_idx" ON "users"("organization_id");
 
 -- CreateIndex
 CREATE INDEX "users_email_idx" ON "users"("email");
 
 -- CreateIndex
 CREATE INDEX "users_role_id_idx" ON "users"("role_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_organization_id_email_key" ON "users"("organization_id", "email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "refresh_tokens_token_key" ON "refresh_tokens"("token");
@@ -425,7 +581,13 @@ CREATE UNIQUE INDEX "password_resets_token_key" ON "password_resets"("token");
 CREATE INDEX "password_resets_token_idx" ON "password_resets"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "lead_sources_name_key" ON "lead_sources"("name");
+CREATE INDEX "lead_sources_organization_id_idx" ON "lead_sources"("organization_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "lead_sources_organization_id_name_key" ON "lead_sources"("organization_id", "name");
+
+-- CreateIndex
+CREATE INDEX "leads_organization_id_idx" ON "leads"("organization_id");
 
 -- CreateIndex
 CREATE INDEX "leads_status_idx" ON "leads"("status");
@@ -449,6 +611,12 @@ CREATE INDEX "lead_notes_lead_id_idx" ON "lead_notes"("lead_id");
 CREATE INDEX "lead_timelines_lead_id_idx" ON "lead_timelines"("lead_id");
 
 -- CreateIndex
+CREATE INDEX "builders_organization_id_idx" ON "builders"("organization_id");
+
+-- CreateIndex
+CREATE INDEX "projects_organization_id_idx" ON "projects"("organization_id");
+
+-- CreateIndex
 CREATE INDEX "projects_builder_id_idx" ON "projects"("builder_id");
 
 -- CreateIndex
@@ -467,6 +635,15 @@ CREATE INDEX "units_status_idx" ON "units"("status");
 CREATE UNIQUE INDEX "units_tower_id_unit_number_key" ON "units"("tower_id", "unit_number");
 
 -- CreateIndex
+CREATE INDEX "property_lookups_organization_id_type_idx" ON "property_lookups"("organization_id", "type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "property_lookups_organization_id_type_normalized_value_key" ON "property_lookups"("organization_id", "type", "normalized_value");
+
+-- CreateIndex
+CREATE INDEX "properties_organization_id_idx" ON "properties"("organization_id");
+
+-- CreateIndex
 CREATE INDEX "properties_status_idx" ON "properties"("status");
 
 -- CreateIndex
@@ -474,6 +651,12 @@ CREATE INDEX "properties_city_idx" ON "properties"("city");
 
 -- CreateIndex
 CREATE INDEX "properties_type_idx" ON "properties"("type");
+
+-- CreateIndex
+CREATE INDEX "properties_listing_category_idx" ON "properties"("listing_category");
+
+-- CreateIndex
+CREATE INDEX "properties_locality_idx" ON "properties"("locality");
 
 -- CreateIndex
 CREATE INDEX "property_images_property_id_idx" ON "property_images"("property_id");
@@ -491,7 +674,7 @@ CREATE INDEX "site_visits_scheduled_at_idx" ON "site_visits"("scheduled_at");
 CREATE INDEX "site_visits_status_idx" ON "site_visits"("status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "bookings_booking_number_key" ON "bookings"("booking_number");
+CREATE INDEX "bookings_organization_id_idx" ON "bookings"("organization_id");
 
 -- CreateIndex
 CREATE INDEX "bookings_lead_id_idx" ON "bookings"("lead_id");
@@ -503,13 +686,22 @@ CREATE INDEX "bookings_status_idx" ON "bookings"("status");
 CREATE INDEX "bookings_booking_number_idx" ON "bookings"("booking_number");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "bookings_organization_id_booking_number_key" ON "bookings"("organization_id", "booking_number");
+
+-- CreateIndex
 CREATE INDEX "payments_booking_id_idx" ON "payments"("booking_id");
+
+-- CreateIndex
+CREATE INDEX "notifications_organization_id_idx" ON "notifications"("organization_id");
 
 -- CreateIndex
 CREATE INDEX "notifications_status_idx" ON "notifications"("status");
 
 -- CreateIndex
 CREATE INDEX "notifications_type_idx" ON "notifications"("type");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_organization_id_idx" ON "audit_logs"("organization_id");
 
 -- CreateIndex
 CREATE INDEX "audit_logs_entity_entity_id_idx" ON "audit_logs"("entity", "entity_id");
@@ -521,10 +713,22 @@ CREATE INDEX "audit_logs_user_id_idx" ON "audit_logs"("user_id");
 CREATE INDEX "audit_logs_created_at_idx" ON "audit_logs"("created_at");
 
 -- AddForeignKey
+ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "subscription_plans"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "roles" ADD CONSTRAINT "roles_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "role_permissions" ADD CONSTRAINT "role_permissions_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "role_permissions" ADD CONSTRAINT "role_permissions_permission_id_fkey" FOREIGN KEY ("permission_id") REFERENCES "permissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "users" ADD CONSTRAINT "users_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -534,6 +738,12 @@ ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "password_resets" ADD CONSTRAINT "password_resets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lead_sources" ADD CONSTRAINT "lead_sources_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "leads" ADD CONSTRAINT "leads_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "leads" ADD CONSTRAINT "leads_source_id_fkey" FOREIGN KEY ("source_id") REFERENCES "lead_sources"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -563,6 +773,12 @@ ALTER TABLE "lead_timelines" ADD CONSTRAINT "lead_timelines_lead_id_fkey" FOREIG
 ALTER TABLE "lead_timelines" ADD CONSTRAINT "lead_timelines_performed_by_id_fkey" FOREIGN KEY ("performed_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "builders" ADD CONSTRAINT "builders_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "projects" ADD CONSTRAINT "projects_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "projects" ADD CONSTRAINT "projects_builder_id_fkey" FOREIGN KEY ("builder_id") REFERENCES "builders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -570,6 +786,12 @@ ALTER TABLE "towers" ADD CONSTRAINT "towers_project_id_fkey" FOREIGN KEY ("proje
 
 -- AddForeignKey
 ALTER TABLE "units" ADD CONSTRAINT "units_tower_id_fkey" FOREIGN KEY ("tower_id") REFERENCES "towers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "property_lookups" ADD CONSTRAINT "property_lookups_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "properties" ADD CONSTRAINT "properties_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "properties" ADD CONSTRAINT "properties_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -584,7 +806,13 @@ ALTER TABLE "site_visits" ADD CONSTRAINT "site_visits_lead_id_fkey" FOREIGN KEY 
 ALTER TABLE "site_visits" ADD CONSTRAINT "site_visits_agent_id_fkey" FOREIGN KEY ("agent_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "bookings" ADD CONSTRAINT "bookings_lead_id_fkey" FOREIGN KEY ("lead_id") REFERENCES "leads"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_property_id_fkey" FOREIGN KEY ("property_id") REFERENCES "properties"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "bookings" ADD CONSTRAINT "bookings_unit_id_fkey" FOREIGN KEY ("unit_id") REFERENCES "units"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -596,4 +824,11 @@ ALTER TABLE "bookings" ADD CONSTRAINT "bookings_agent_id_fkey" FOREIGN KEY ("age
 ALTER TABLE "payments" ADD CONSTRAINT "payments_booking_id_fkey" FOREIGN KEY ("booking_id") REFERENCES "bookings"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
