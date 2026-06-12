@@ -1,0 +1,816 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== SAAS / MULTI-TENANCY ====================
+
+enum OrganizationStatus {
+  ACTIVE
+  TRIAL
+  SUSPENDED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+model Organization {
+  id        String             @id @default(uuid())
+  name      String
+  slug      String             @unique
+  domain    String?            @unique
+  logo      String?
+  email     String?
+  phone     String?
+  address   String?
+  status    OrganizationStatus @default(TRIAL)
+  settings  Json?
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+  deletedAt DateTime?          @map("deleted_at")
+
+  subscription Subscription?
+  users        User[]
+  roles        Role[]
+  leadSources  LeadSource[]
+  leads        Lead[]
+  builders     Builder[]
+  projects     Project[]
+  properties       Property[]
+  propertyLookups  PropertyLookup[]
+  bookings         Booking[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("organizations")
+}
+
+model SubscriptionPlan {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  slug          String   @unique
+  description   String?
+  priceMonthly  Decimal  @map("price_monthly") @db.Decimal(10, 2)
+  priceYearly   Decimal? @map("price_yearly") @db.Decimal(10, 2)
+  maxUsers      Int      @map("max_users")
+  maxLeads      Int      @map("max_leads")
+  maxProperties Int      @map("max_properties")
+  features      Json?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  status             SubscriptionStatus @default(TRIAL)
+  trialEndsAt        DateTime?          @map("trial_ends_at")
+  currentPeriodStart DateTime           @map("current_period_start")
+  currentPeriodEnd   DateTime           @map("current_period_end")
+  cancelledAt        DateTime?          @map("cancelled_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  organizationId String       @unique @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId         String       @map("plan_id")
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// ==================== RBAC ====================
+
+model Role {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organizationId String?       @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  module      String
+  action      String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  roles RolePermission[]
+
+  @@unique([module, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ==================== USER ====================
+
+model User {
+  id           String    @id @default(uuid())
+  email        String
+  password     String
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  phone        String?
+  avatar       String?
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roleId         String       @map("role_id")
+  role           Role         @relation(fields: [roleId], references: [id])
+
+  refreshTokens    RefreshToken[]
+  passwordResets   PasswordReset[]
+  assignedLeads    Lead[]           @relation("AssignedLeads")
+  createdLeads     Lead[]           @relation("CreatedLeads")
+  leadNotes        LeadNote[]
+  leadTimelines    LeadTimeline[]
+  siteVisits       SiteVisit[]      @relation("VisitAgent")
+  bookings         Booking[]        @relation("BookingAgent")
+  auditLogs        AuditLog[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([email])
+  @@index([roleId])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  isUsed    Boolean  @default(false) @map("is_used")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("password_resets")
+}
+
+// ==================== LEAD SOURCES ====================
+
+enum LeadSourceType {
+  WEBSITE
+  FACEBOOK
+  GOOGLE
+  WHATSAPP
+  MANUAL_ENTRY
+  REFERRAL
+  WALK_IN
+  OTHER
+}
+
+model LeadSource {
+  id          String         @id @default(uuid())
+  name        String
+  type        LeadSourceType
+  description String?
+  isActive    Boolean        @default(true) @map("is_active")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  deletedAt   DateTime?      @map("deleted_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  leads Lead[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("lead_sources")
+}
+
+// ==================== LEADS ====================
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  NEGOTIATION
+  SITE_VISIT_SCHEDULED
+  SITE_VISIT_DONE
+  BOOKED
+  LOST
+  WON
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Lead {
+  id          String       @id @default(uuid())
+  firstName   String       @map("first_name")
+  lastName    String       @map("last_name")
+  email       String?
+  phone       String
+  alternatePhone String?   @map("alternate_phone")
+  status      LeadStatus   @default(NEW)
+  priority    LeadPriority @default(MEDIUM)
+  budget      Decimal?     @db.Decimal(15, 2)
+  requirements String?
+  address     String?
+  city        String?
+  state       String?
+  pincode     String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  deletedAt   DateTime?    @map("deleted_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceId    String  @map("source_id")
+  source      LeadSource @relation(fields: [sourceId], references: [id])
+  assignedToId String? @map("assigned_to_id")
+  assignedTo  User?   @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  createdById String  @map("created_by_id")
+  createdBy   User    @relation("CreatedLeads", fields: [createdById], references: [id])
+  propertyId  String? @map("property_id")
+  property    Property? @relation(fields: [propertyId], references: [id])
+  projectId   String? @map("project_id")
+  project     Project?  @relation(fields: [projectId], references: [id])
+
+  notes      LeadNote[]
+  timeline   LeadTimeline[]
+  siteVisits SiteVisit[]
+  bookings   Booking[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([sourceId])
+  @@index([phone])
+  @@index([email])
+  @@map("leads")
+}
+
+model LeadNote {
+  id        String   @id @default(uuid())
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  leadId    String @map("lead_id")
+  lead      Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdById String @map("created_by_id")
+  createdBy User   @relation(fields: [createdById], references: [id])
+
+  @@index([leadId])
+  @@map("lead_notes")
+}
+
+model LeadTimeline {
+  id          String   @id @default(uuid())
+  action      String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  leadId      String @map("lead_id")
+  lead        Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  performedById String @map("performed_by_id")
+  performedBy User   @relation(fields: [performedById], references: [id])
+
+  @@index([leadId])
+  @@map("lead_timelines")
+}
+
+// ==================== BUILDER & PROJECTS ====================
+
+model Builder {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  logo        String?
+  website     String?
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  state       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  projects Project[]
+
+  @@index([organizationId])
+  @@map("builders")
+}
+
+enum ProjectStatus {
+  PLANNING
+  UNDER_CONSTRUCTION
+  READY_TO_MOVE
+  COMPLETED
+  ON_HOLD
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  address     String
+  city        String
+  state       String
+  pincode     String?
+  latitude    Decimal?      @db.Decimal(10, 8)
+  longitude   Decimal?      @db.Decimal(11, 8)
+  status      ProjectStatus @default(PLANNING)
+  launchDate  DateTime?     @map("launch_date")
+  possessionDate DateTime?  @map("possession_date")
+  amenities   String[]
+  isActive    Boolean       @default(true) @map("is_active")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  builderId String  @map("builder_id")
+  builder   Builder @relation(fields: [builderId], references: [id])
+
+  towers     Tower[]
+  properties Property[]
+  leads      Lead[]
+
+  @@index([organizationId])
+  @@index([builderId])
+  @@index([city])
+  @@map("projects")
+}
+
+model Tower {
+  id          String   @id @default(uuid())
+  name        String
+  totalFloors Int      @map("total_floors")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  units Unit[]
+
+  @@index([projectId])
+  @@map("towers")
+}
+
+enum UnitStatus {
+  AVAILABLE
+  BOOKED
+  SOLD
+  BLOCKED
+  HOLD
+}
+
+enum UnitType {
+  STUDIO
+  ONE_BHK
+  TWO_BHK
+  THREE_BHK
+  FOUR_BHK
+  PENTHOUSE
+  VILLA
+  PLOT
+  COMMERCIAL
+}
+
+model Unit {
+  id          String     @id @default(uuid())
+  unitNumber  String     @map("unit_number")
+  floor       Int
+  type        UnitType
+  status      UnitStatus @default(AVAILABLE)
+  area        Decimal    @db.Decimal(10, 2)
+  price       Decimal    @db.Decimal(15, 2)
+  facing      String?
+  description String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+
+  towerId String @map("tower_id")
+  tower   Tower  @relation(fields: [towerId], references: [id], onDelete: Cascade)
+
+  bookings Booking[]
+
+  @@unique([towerId, unitNumber])
+  @@index([towerId])
+  @@index([status])
+  @@map("units")
+}
+
+// ==================== PROPERTIES ====================
+
+enum ListingCategory {
+  BUY
+  RENT
+  COMMERCIAL
+  NEW_PROJECTS
+  PG
+  PLOT
+  LUXURY
+}
+
+enum PropertyType {
+  APARTMENT
+  BUILDER_FLOOR
+  VILLA
+  PLOT
+  COMMERCIAL
+  OFFICE
+  SHOP
+  WAREHOUSE
+  COWORKING_SPACE
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  UNDER_OFFER
+  SOLD
+  RENTED
+  OFF_MARKET
+}
+
+enum PropertyAge {
+  UNDER_CONSTRUCTION
+  READY_TO_MOVE
+  NEW
+  ONE_TO_FIVE_YEARS
+  FIVE_TO_TEN_YEARS
+  TEN_PLUS_YEARS
+}
+
+enum Furnishing {
+  FULLY_FURNISHED
+  SEMI_FURNISHED
+  UNFURNISHED
+}
+
+enum Facing {
+  NORTH
+  SOUTH
+  EAST
+  WEST
+}
+
+enum PossessionStatus {
+  IMMEDIATE
+  WITHIN_3_MONTHS
+  WITHIN_6_MONTHS
+  WITHIN_1_YEAR
+}
+
+enum PropertyLookupType {
+  LOCALITY
+  SECTOR
+  LANDMARK
+  PINCODE
+  BUILDER
+}
+
+model PropertyLookup {
+  id              String             @id @default(uuid())
+  type            PropertyLookupType
+  value           String
+  normalizedValue String             @map("normalized_value")
+  usageCount      Int                @default(1) @map("usage_count")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type, normalizedValue])
+  @@index([organizationId, type])
+  @@map("property_lookups")
+}
+
+model Property {
+  id               String            @id @default(uuid())
+  title            String
+  description      String?
+  listingCategory  ListingCategory   @default(BUY) @map("listing_category")
+  type             PropertyType
+  status           PropertyStatus    @default(AVAILABLE)
+  price            Decimal           @db.Decimal(15, 2)
+  area             Decimal           @db.Decimal(10, 2)
+  carpetArea       Decimal?          @map("carpet_area") @db.Decimal(10, 2)
+  builtUpArea      Decimal?          @map("built_up_area") @db.Decimal(10, 2)
+  superArea        Decimal?          @map("super_area") @db.Decimal(10, 2)
+  bedrooms         Int?
+  bathrooms        Int?
+  address          String
+  city             String
+  state            String
+  pincode          String?
+  locality         String            @default("")
+  sector           String?
+  landmark         String?
+  latitude         Decimal?          @db.Decimal(10, 8)
+  longitude        Decimal?          @db.Decimal(11, 8)
+  builderName      String?           @map("builder_name")
+  propertyAge      PropertyAge?      @map("property_age")
+  furnishing       Furnishing?
+  facing           Facing?
+  possessionStatus PossessionStatus? @map("possession_status")
+  possessionDate   String?           @map("possession_date")
+  roiPotential     Decimal?          @map("roi_potential") @db.Decimal(5, 2)
+  isVerified       Boolean           @default(true) @map("is_verified")
+  hasRera          Boolean           @default(false) @map("has_rera")
+  reraId           String?           @map("rera_id")
+  videoTourUrl     String?           @map("video_tour_url")
+  virtualTourUrl   String?           @map("virtual_tour_url")
+  amenities        String[]
+  brochureUrl      String?           @map("brochure_url")
+  isActive         Boolean           @default(true) @map("is_active")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  deletedAt        DateTime?         @map("deleted_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId String?  @map("project_id")
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  images   PropertyImage[]
+  leads    Lead[]
+  bookings Booking[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([city])
+  @@index([type])
+  @@index([listingCategory])
+  @@index([locality])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id        String   @id @default(uuid())
+  url       String
+  caption   String?
+  isPrimary Boolean  @default(false) @map("is_primary")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  propertyId String   @map("property_id")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_images")
+}
+
+// ==================== SITE VISITS ====================
+
+enum VisitStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  RESCHEDULED
+}
+
+model SiteVisit {
+  id            String      @id @default(uuid())
+  scheduledAt   DateTime    @map("scheduled_at")
+  status        VisitStatus @default(SCHEDULED)
+  feedback      String?
+  rating        Int?
+  notes         String?
+  completedAt   DateTime?   @map("completed_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  deletedAt     DateTime?   @map("deleted_at")
+
+  leadId    String @map("lead_id")
+  lead      Lead   @relation(fields: [leadId], references: [id])
+  agentId   String @map("agent_id")
+  agent     User   @relation("VisitAgent", fields: [agentId], references: [id])
+  propertyId String? @map("property_id")
+  projectId  String? @map("project_id")
+
+  @@index([leadId])
+  @@index([agentId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("site_visits")
+}
+
+// ==================== BOOKINGS ====================
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  PARTIALLY_PAID
+  FULLY_PAID
+  CANCELLED
+  REFUNDED
+}
+
+model Booking {
+  id            String        @id @default(uuid())
+  bookingNumber String        @map("booking_number")
+  status        BookingStatus @default(PENDING)
+  totalAmount   Decimal       @db.Decimal(15, 2) @map("total_amount")
+  paidAmount    Decimal       @default(0) @db.Decimal(15, 2) @map("paid_amount")
+  bookingDate   DateTime      @default(now()) @map("booking_date")
+  notes         String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  deletedAt     DateTime?     @map("deleted_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadId     String @map("lead_id")
+  lead       Lead   @relation(fields: [leadId], references: [id])
+  propertyId String? @map("property_id")
+  property   Property? @relation(fields: [propertyId], references: [id])
+  unitId     String? @map("unit_id")
+  unit       Unit?  @relation(fields: [unitId], references: [id])
+  agentId    String @map("agent_id")
+  agent      User   @relation("BookingAgent", fields: [agentId], references: [id])
+
+  payments Payment[]
+
+  @@unique([organizationId, bookingNumber])
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([status])
+  @@index([bookingNumber])
+  @@map("bookings")
+}
+
+enum PaymentMethod {
+  CASH
+  CHEQUE
+  BANK_TRANSFER
+  UPI
+  CARD
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  amount        Decimal       @db.Decimal(15, 2)
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  transactionId String?       @map("transaction_id")
+  reference     String?
+  paidAt        DateTime?     @map("paid_at")
+  notes         String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  bookingId String  @map("booking_id")
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("payments")
+}
+
+// ==================== NOTIFICATIONS ====================
+
+enum NotificationType {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  DELIVERED
+}
+
+model Notification {
+  id        String             @id @default(uuid())
+  type      NotificationType
+  status    NotificationStatus @default(PENDING)
+  recipient String
+  subject   String?
+  message   String
+  metadata  Json?
+  sentAt    DateTime?          @map("sent_at")
+  error     String?
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([type])
+  @@map("notifications")
+}
+
+// ==================== AUDIT LOGS ====================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  entity     String
+  entityId   String   @map("entity_id")
+  oldValues  Json?    @map("old_values")
+  newValues  Json?    @map("new_values")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

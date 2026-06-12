@@ -1,0 +1,31 @@
+import { defineTable } from '../types';
+
+export const projectsTable = defineTable({
+  model: 'Project',
+  table: 'projects',
+  description: 'Real estate projects scoped to an organization',
+  tenantScoped: true,
+  columns: [
+    { name: 'id', dbColumn: 'id', type: 'UUID', primaryKey: true },
+    { name: 'organizationId', dbColumn: 'organization_id', type: 'UUID', indexed: true, tenantKey: true, foreignKey: { table: 'organizations', column: 'id' } },
+    { name: 'name', dbColumn: 'name', type: 'STRING' },
+    { name: 'description', dbColumn: 'description', type: 'TEXT', nullable: true },
+    { name: 'address', dbColumn: 'address', type: 'STRING' },
+    { name: 'city', dbColumn: 'city', type: 'STRING', indexed: true },
+    { name: 'state', dbColumn: 'state', type: 'STRING' },
+    { name: 'pincode', dbColumn: 'pincode', type: 'STRING', nullable: true },
+    { name: 'latitude', dbColumn: 'latitude', type: 'DECIMAL', nullable: true },
+    { name: 'longitude', dbColumn: 'longitude', type: 'DECIMAL', nullable: true },
+    { name: 'status', dbColumn: 'status', type: 'ENUM', enumValues: ['PLANNING', 'UNDER_CONSTRUCTION', 'READY_TO_MOVE', 'COMPLETED', 'ON_HOLD'], default: 'PLANNING' },
+    { name: 'launchDate', dbColumn: 'launch_date', type: 'DATETIME', nullable: true },
+    { name: 'possessionDate', dbColumn: 'possession_date', type: 'DATETIME', nullable: true },
+    { name: 'amenities', dbColumn: 'amenities', type: 'ARRAY' },
+    { name: 'isActive', dbColumn: 'is_active', type: 'BOOLEAN', default: 'true' },
+    { name: 'builderId', dbColumn: 'builder_id', type: 'UUID', indexed: true, foreignKey: { table: 'builders', column: 'id' } },
+    { name: 'createdAt', dbColumn: 'created_at', type: 'DATETIME' },
+    { name: 'updatedAt', dbColumn: 'updated_at', type: 'DATETIME' },
+    { name: 'deletedAt', dbColumn: 'deleted_at', type: 'DATETIME', nullable: true },
+  ],
+  indexes: ['organizationId', 'builderId', 'city'],
+  relations: ['Organization', 'Builder', 'Tower', 'Property', 'Lead'],
+});
